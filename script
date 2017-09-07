@@ -1,0 +1,127 @@
+#!/bin/bash
+configfile='/home/pi/script.conf'
+
+# - Define arrays for saving settings
+aKEY=()
+aPRESS=()
+aREPEAT=()
+aDELAY=()
+aRELEASE=()
+
+rLock=0
+nrLock=0
+drLock=0
+
+# - Init counter
+arrayCount=0
+ echo -ne "Loading config:"
+[ $# -gt 0 ] && [ -r "$1" ] && configfile="$1"
+     while read -r line; do
+	 echo -ne "."
+	# - Increment array counter if new block found
+	if [[ $line == "begin" ]]; then arrayCount=$((arrayCount+1));fi
+
+	# - Save read settings to arrays
+	key=$(echo $line | awk -F: '/key=/ && $0 != "" { getline; print $0 }' | cut -d'=' -f2)
+	if [[ $key != "" ]]; then aKEY[$arrayCount]=$key; fi
+
+	press=$(echo $line | awk -F: '/press=/ && $0 != "" { getline; print $0 }' | cut -d'=' -f2)
+	if [[ $press != "" ]]; then aPRESS[$arrayCount]=$press; fi
+
+	repeat=$(echo $line | awk -F: '/repeat=/ && $0 != "" { getline; print $0 }' | cut -d'=' -f2)
+	if [[ $repeat != "" ]]; then aREPEAT[$arrayCount]=$repeat; fi
+
+	delay=$(echo $line | awk -F: '/delay=/ && $0 != "" { getline; print $0 }' | cut -d'=' -f2)
+	if [[ $delay != "" ]]; then aDELAY[$arrayCount]=$delay; fi
+
+	release=$(echo $line | awk -F: '/release=/ && $0 != "" { getline; print $0 }' | cut -d'=' -f2)
+	if [[ $release != "" ]]; then aRELEASE[$arrayCount]=$release; fi
+
+    done < <( # - Reverse fork to allow vars to be saved
+	# - Strip comments from config
+	sed -e 's/[[:space:]]*#.*// ; /^[[:space:]]*$/d' "$configfile"
+    )
+
+ echo "Done!"
+#echo Test: ${aKEY[@]}
+#echo Test: ${aPRESS[@]}
+#echo Test: ${aREPEAT[@]}
+#echo Test: ${aDELAY[@]}
+#echo Test: ${aRELEASE[@]}
+#exit
+
+# - Commands to listen to
+{ \
+stdbuf -oL ir-keytable -t -d /dev/input/event2 & \
+stdbuf -oL ir-keytable -t -d /dev/input/event0 \
+; } |
+  while IFS= read -r line
+  do
+	# echo $line
+
+	# - If repeatlock (R) is set, check if it should be reset
+  	if [[ $rLock -gt 0 ]]; then
+		if [[ $line == *"key_up: ${aKEY[$rLock]}"* ]]; then
+			# - Run release command
+			$(${aRELEASE[$rLock]})
+			# echo ${aRELEASE[$rLock]}
+			rLock=0
+	  	fi
+		continue
+	fi
+
+	# - If non-repeatlock (0) is set, check if it should be reset
+  	if [[ $nrLock -gt 0 ]]; then
+	  if [[ $line == *"key_up: ${aKEY[$nrLock]}"* ]]; then
+	    nrLock=0
+	  fi
+	continue
+	fi
+
+	# - If delay repeatlock (>=1) is set, check if it should be reset
+  	if [[ $drLock -gt 0 ]]; then
+#	echo drLock: $drLock
+#	echo drLockIter: $drLockIter
+#	echo drLockDelay: $drLockDelay
+		if [[ $line == *"key_up: ${aKEY[$drLock]}"* ]]; then
+#	    		# echo "RESET!"
+			drLock=0
+			drLockIter=0
+			drLockDelay=0
+			continue
+	  	fi
+		if [[ $drLockIter -eq 0 ]]; then
+			drLockDelay=$((drLockDelay+1))
+			if [[ $drLockDelay -ge ${aDELAY[$drLock]} ]]; then
+				drLockIter=$((drLockIter+1))
+				drLockDelay=0
+			fi
+			continue
+		fi
+		drLockIter=$((drLockIter+1))
+		if [[ $drLockIter -ge ${aREPEAT[$drLock]} ]]; then
+			drLockIter=1
+			$(${aPRESS[$drLock]})
+			# echo ${aPRESS[$drLock]}
+		fi
+		continue
+	fi
+
+
+ 	# - Loop through config to look for matches
+	for ((i=1;i<${#aKEY[@]}+1;i++)); do
+		# - Check for keypress
+		if [[ $line == *"key_down: ${aKEY[$i]}"* ]]; then
+			# - Set repeatlock if needed
+			if [[ ${aREPEAT[$i]} == "R" ]]; then rLock=$i; fi
+			if [[ ${aREPEAT[$i]} == "0" ]]; then nrLock=$i; fi
+			if [[ ${aREPEAT[$i]} -ge 1 ]]; then drLock=$i; fi
+			# - Run press command
+			$(${aPRESS[$i]})
+			# echo ${aPRESS[$i]}
+
+		fi
+
+	done
+
+done

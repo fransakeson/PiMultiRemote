@@ -1,0 +1,142 @@
+#!/bin/bash
+KODI_HOST=192.168.0.5
+KODI_PORT=8080
+KODI_USER=
+KODI_PASS=
+
+function xbmc_req {
+	# timeout 2 added to kill curl when hanging in the subtitle menu
+	output=$(timeout 2 curl -s -i -X POST --header "Content-Type: application/json" -d "$1" http://$KODI_USER:$KODI_PASS@$KODI_HOST:$KODI_PORT/jsonrpc)
+
+	if [[ $2 = true ]];
+	then
+		echo $output
+	fi
+}
+
+function parse_json {
+	key=$1
+	awk -F"[,:}]" '{for(i=1;i<=NF;i++){if($i~/'$key'\042/){print $(i+1)}}}' | tr -d '"'
+}
+
+case $@ in
+
+	playpause )
+		# Get Active players first
+		output=$(xbmc_req '{"jsonrpc": "2.0", "method": "Player.GetActivePlayers", "id": 99}' true)
+		#echo "output: $output"
+		player_id=$(echo $output | parse_json "playerid")
+		# echo "Pausing/Playing the player with ID => $player_id"
+		xbmc_req '{"jsonrpc": "2.0", "method": "Player.PlayPause", "params": { "playerid": '$player_id' }, "id": 1}'
+	;;
+
+	up )
+		output=$(xbmc_req '{"jsonrpc": "2.0", "method": "GUI.GetProperties", "params": { "properties": ["currentwindow"] }, "id": 1}' true)
+		player_id=$(echo $output | parse_json "id")
+		player_id=$(echo $player_id | cut -c3-)
+		if [[ $player_id == "12005" ]]; then
+			output=$(xbmc_req '{"jsonrpc": "2.0", "method": "Player.GetActivePlayers", "id": 99}' true)
+			#echo "output: $output"
+			player_id=$(echo $output | parse_json "playerid")
+			#echo "Pausing/Playing the player with ID => $player_id"
+			xbmc_req '{"jsonrpc": "2.0", "method": "Player.Seek", "params": { "playerid": '$player_id', "value": "bigforward" }, "id": 1}'
+		else
+			xbmc_req '{"jsonrpc": "2.0", "method": "Input.Up"}'
+		fi
+	;;
+
+	down )
+		output=$(xbmc_req '{"jsonrpc": "2.0", "method": "GUI.GetProperties", "params": { "properties": ["currentwindow"] }, "id": 1}' true)
+		player_id=$(echo $output | parse_json "id")
+		player_id=$(echo $player_id | cut -c3-)
+		if [[ $player_id == "12005" ]]; then
+			output=$(xbmc_req '{"jsonrpc": "2.0", "method": "Player.GetActivePlayers", "id": 99}' true)
+			#echo "output: $output"
+			player_id=$(echo $output | parse_json "playerid")
+			#echo "Pausing/Playing the player with ID => $player_id"
+			xbmc_req '{"jsonrpc": "2.0", "method": "Player.Seek", "params": { "playerid": '$player_id', "value": "bigbackward" }, "id": 1}'
+		else
+			xbmc_req '{"jsonrpc": "2.0", "method": "Input.Down"}'
+		fi
+	;;
+
+	left )
+		output=$(xbmc_req '{"jsonrpc": "2.0", "method": "GUI.GetProperties", "params": { "properties": ["currentwindow"] }, "id": 1}' true)
+		player_id=$(echo $output | parse_json "id")
+		player_id=$(echo $player_id | cut -c3-)
+		if [[ $player_id == "12005" ]]; then
+			output=$(xbmc_req '{"jsonrpc": "2.0", "method": "Player.GetActivePlayers", "id": 99}' true)
+			#echo "output: $output"
+			player_id=$(echo $output | parse_json "playerid")
+			#echo "Pausing/Playing the player with ID => $player_id"
+			xbmc_req '{"jsonrpc": "2.0", "method": "Player.Seek", "params": { "playerid": '$player_id', "value": "smallbackward" }, "id": 1}'
+		else
+			xbmc_req '{"jsonrpc": "2.0", "method": "Input.Left"}'
+		fi
+	;;
+
+	right )
+		output=$(xbmc_req '{"jsonrpc": "2.0", "method": "GUI.GetProperties", "params": { "properties": ["currentwindow"] }, "id": 1}' true)
+		player_id=$(echo $output | parse_json "id")
+		player_id=$(echo $player_id | cut -c3-)
+		if [[ $player_id == "12005" ]]; then
+			output=$(xbmc_req '{"jsonrpc": "2.0", "method": "Player.GetActivePlayers", "id": 99}' true)
+			#echo "output: $output"
+			player_id=$(echo $output | parse_json "playerid")
+			#echo "Pausing/Playing the player with ID => $player_id"
+			xbmc_req '{"jsonrpc": "2.0", "method": "Player.Seek", "params": { "playerid": '$player_id', "value": "smallforward" }, "id": 1}'
+		else
+			xbmc_req '{"jsonrpc": "2.0", "method": "Input.Right"}'
+		fi
+	;;
+
+	pagedown )
+		xbmc_req '{"jsonrpc": "2.0", "method": "Input.ExecuteAction", "params": { "action": "pagedown" }}'
+	;;
+
+	pageup )
+		xbmc_req '{"jsonrpc": "2.0", "method": "Input.ExecuteAction", "params": { "action": "pageup" }}'
+	;;
+
+	context )
+		output=$(xbmc_req '{"jsonrpc": "2.0", "method": "GUI.GetProperties", "params": { "properties": ["currentwindow"] }, "id": 1}' true)
+		player_id=$(echo $output | parse_json "id")
+		player_id=$(echo $player_id | cut -c3-)
+		if [[ $player_id == "12005" ]]; then
+			xbmc_req '{"jsonrpc": "2.0", "method": "GUI.ActivateWindow", "params": { "window": "subtitlesearch" }, "id": 1}'
+		else
+			xbmc_req '{"jsonrpc": "2.0", "method": "Input.ContextMenu"}'
+		fi
+	;;
+
+	info )
+		xbmc_req '{"jsonrpc": "2.0", "method": "Input.Info"}'
+	;;
+
+	back )
+			xbmc_req '{"jsonrpc": "2.0", "method": "Input.Back"}'
+	;;
+
+	ok )
+		output=$(xbmc_req '{"jsonrpc": "2.0", "method": "GUI.GetProperties", "params": { "properties": ["currentwindow"] }, "id": 1}' true)
+		player_id=$(echo $output | parse_json "id")
+		player_id=$(echo $player_id | cut -c3-)
+		if [[ $player_id == "12005" ]]; then
+			xbmc_req '{"jsonrpc": "2.0", "method": "Input.ShowOSD"}'
+		else
+			xbmc_req '{"jsonrpc": "2.0", "method": "Input.Select"}'
+		fi
+	;;
+
+	home )
+		output=$(xbmc_req '{"jsonrpc": "2.0", "method": "Player.GetActivePlayers", "id": 99}' true)
+		player_id=$(echo $output | parse_json "playerid")
+		if [[ $player_id -gt 0 ]]; then
+ 			xbmc_req '{"jsonrpc": "2.0", "method": "Player.Stop", "params": { "playerid": '$player_id' }, "id": 1}'
+		else
+			xbmc_req '{"jsonrpc": "2.0", "method": "Input.Home"}'
+		fi
+	;;
+
+esac
+
