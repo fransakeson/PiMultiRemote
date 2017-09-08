@@ -2,7 +2,7 @@
 **Use RaspberryPi as gateway to control all your appliances**
 
 Todo: 
-- Fix config array to trigger on key instead of looping through the whole thing on each keypress. Stupid stupid.
+- Fix config array to trigger on index instead of looping through the whole thing on each keypress. Stupid stupid.
 - Document the RF remote setup and keymapping.
 
 ## My HW setup:
